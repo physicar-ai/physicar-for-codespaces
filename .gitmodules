@@ -1,0 +1,6 @@
+[submodule ".devcontainer/physicar-python"]
+	path = .devcontainer/physicar-python
+	url = https://github.com/physicar-ai/physicar-python.git
+[submodule ".devcontainer/deepracer-simapp-mount"]
+	path = .devcontainer/deepracer-simapp-mount
+	url = https://github.com/physicar-ai/deepracer-simapp-mount.git
