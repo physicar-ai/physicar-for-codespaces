@@ -5,7 +5,7 @@
 | Branch | Description | Open in Codespaces |
 |:--------:|:--------:|:--------:|
 | **physicar**  | Agent, ROS2 | Coming soon |
-| **deepracer** | DeepRacer | [![Open in GitHub Codespaces](images/badge-deepracer.svg)](../../../../codespaces/new/physicar-ai/physicar-for-codespaces/tree/deepracer?quickstart=1) |
+| **deepracer** | DeepRacer | [![Open in GitHub Codespaces](images/badge-deepracer.svg)](https://codespaces.new/physicar-ai/physicar-for-codespaces/tree/deepracer?quickstart=1) |
 
 
 ## About PhysiCar for Codespaces
