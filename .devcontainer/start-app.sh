@@ -5,6 +5,7 @@ PHYSICAR_PYTHON="$WORKSPACE/.devcontainer/physicar-python"
 
 if [ ! -d "$PHYSICAR_PYTHON/src" ]; then
     pip3 install --upgrade physicar[codespaces-deepracer]
+    mkdir -p "$PHYSICAR_PYTHON/src"
 fi
 
 exec /usr/bin/python3 -m uvicorn physicar.codespaces.deepracer.app:app \
