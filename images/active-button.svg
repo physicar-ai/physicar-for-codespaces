@@ -1,4 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 55 16">
-    <path fill="#1a7f37" d="M8 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"></path>
-    <text x="20" y="12" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#000000">Active</text>
-</svg>
