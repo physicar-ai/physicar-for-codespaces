@@ -1,18 +1,19 @@
 #!/bin/bash
 
 WORKSPACE="$HOME/physicar_ws"
-PHYSICAR_PYTHON="$WORKSPACE/.devcontainer/physicar-python"
+PHYSICAR_PYTHON_DEV="$WORKSPACE/.devcontainer/physicar-python/src"
+PHYSICAR_PYTHON_PKG="$(python3 -c 'import physicar, os; print(os.path.dirname(os.path.dirname(physicar.__file__)))' 2>/dev/null)"
 
-if [ ! -d "$PHYSICAR_PYTHON/src" ]; then
-    pip3 install --upgrade physicar[codespaces-deepracer]
-    mkdir -p "$PHYSICAR_PYTHON/src"
+RELOAD_DIR="${PHYSICAR_PYTHON_DEV}"
+if [ ! -d "$RELOAD_DIR" ]; then
+    RELOAD_DIR="$PHYSICAR_PYTHON_PKG"
 fi
 
 exec /usr/bin/python3 -m uvicorn physicar.codespaces.deepracer.app:app \
     --host 0.0.0.0 \
     --port 8000 \
     --reload \
-    --reload-dir "$PHYSICAR_PYTHON/src" \
+    --reload-dir "$RELOAD_DIR" \
     --reload-include '*.yaml' \
     --reload-include '*.html' \
     --reload-include '*.js' \
