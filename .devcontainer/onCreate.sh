@@ -4,21 +4,15 @@
 sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     curl gnupg2 lsb-release software-properties-common apt-transport-https ca-certificates locales \
     xvfb x11vnc novnc websockify fluxbox xterm supervisor net-tools lxde-core lxterminal \
-    jq python3-pip python3-boto3 docker-compose tmux ffmpeg gh # s3fs 
-
-sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    nginx \
-    xvfb x11vnc novnc openbox \
-    supervisor \
-    alsa-utils ffmpeg \
-    python3-pip python3-dev
+    jq python3-pip python3-boto3 docker-compose tmux ffmpeg gh \
+    nginx openbox alsa-utils python3-dev # s3fs
 
 # noVNC 심링크
 sudo ln -sf vnc_lite.html /usr/share/novnc/index.html 2>/dev/null || true
 
 # ROS 2 Jazzy
 if [ ! -f /opt/ros/jazzy/setup.bash ]; then
-  curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+  sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     -o /usr/share/keyrings/ros-archive-keyring.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" \
     | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
@@ -39,7 +33,7 @@ fi
 
 # Gazebo Harmonic
 if ! command -v gz &>/dev/null; then
-  curl -fsSL https://packages.osrfoundation.org/gazebo.gpg \
+  sudo curl -fsSL https://packages.osrfoundation.org/gazebo.gpg \
     -o /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" \
     | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
@@ -52,15 +46,15 @@ fi
 pip3 config set global.break-system-packages true
 
 # physicar-python & physicar-sim
-git submodule update --init .devcontainer/physicar-sim
 pip3 install physicar
+git submodule update --init .devcontainer/physicar-sim
+git submodule update --init .devcontainer/physicar-ros
 rm -rf .git .gitignore .gitmodules
 
 pip3 install --no-cache-dir \
   opencv-python-headless \
   flask flask-cors websockets pyyaml requests \
   python-multipart watchdog \
-  tflite-runtime \
   setuptools==70.0.0 2>/dev/null || true
 
 # numpy 시스템 버전 유지
@@ -72,8 +66,7 @@ echo -e "SIM=true" | sudo tee /opt/physicar/.env > /dev/null
 
 # nginx 설정
 sudo rm -f /etc/nginx/sites-enabled/default
-sudo cp .devcontainer/physicar /etc/nginx/sites-available/
-sudo ln -sf /etc/nginx/sites-available/physicar /etc/nginx/sites-enabled/physicar
+sudo ln -sf "$PWD/.devcontainer/nginx.conf" /etc/nginx/sites-enabled/physicar
 
 # Pull physicar device v1 Docker image
 docker pull physicar/device:1
