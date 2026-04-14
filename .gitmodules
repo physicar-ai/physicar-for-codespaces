@@ -1,0 +1,9 @@
+[submodule ".devcontainer/physicar-python"]
+	path = .devcontainer/physicar-python
+	url = https://github.com/physicar-ai/physicar-python.git
+[submodule ".devcontainer/physicar-sim"]
+	path = .devcontainer/physicar-sim
+	url = https://github.com/physicar-ai/physicar-sim.git
+[submodule ".devcontainer/physicar-ros"]
+	path = .devcontainer/physicar-ros
+	url = https://github.com/physicar-ai/physicar-ros.git

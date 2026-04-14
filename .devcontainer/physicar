@@ -1,0 +1,145 @@
+# PhysiCar Nginx Configuration (Codespaces)
+
+upstream fastapi_backend {
+    server 127.0.0.1:8000;
+    keepalive 32;
+}
+
+upstream novnc_backend {
+    server 127.0.0.1:6080;
+}
+
+upstream myapp_backend {
+    server 127.0.0.1:5000;
+}
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ""      close;
+}
+
+server {
+    listen 80;
+    server_name _;
+
+    client_max_body_size 500M;
+
+    # ── Gazebo 3D Viewer (/gz) ──
+
+    location /gz/ {
+        alias /home/physicar/physicar_ws/.devcontainer/physicar-sim/;
+        index index.html;
+    }
+
+    # Sim API (world list, status, switch)
+    location /gz/api/ {
+        proxy_pass http://127.0.0.1:9003/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Connection "";
+    }
+
+    # Gazebo WebSocket (3D scene streaming)
+    location /gz/ws {
+        proxy_pass http://127.0.0.1:9002;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400s;
+    }
+
+    # ── noVNC (/vnc) ──
+
+    location = /vnc {
+        return 302 /vnc/?path=vnc/websockify&autoconnect=true&scale=true;
+    }
+
+    location ~ ^/vnc/(.+\.html)$ {
+        set $vnc_page $1;
+        if ($arg_path = "") {
+            return 302 $uri?path=vnc/websockify&autoconnect=true&scale=true;
+        }
+        proxy_pass http://novnc_backend/$vnc_page$is_args$args;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Accept-Encoding "";
+        sub_filter '</head>' '<style>#top_bar,.noVNC_button,.noVNC_panel{display:none!important}html,body,#screen{overflow:hidden!important}</style></head>';
+        sub_filter_once on;
+    }
+
+    location = /vnc/ {
+        if ($arg_path = "") {
+            return 302 /vnc/?path=vnc/websockify&autoconnect=true&scale=true;
+        }
+        proxy_pass http://novnc_backend/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Accept-Encoding "";
+        sub_filter '</head>' '<style>#top_bar,.noVNC_button,.noVNC_panel{display:none!important}html,body,#screen{overflow:hidden!important}</style></head>';
+        sub_filter_once on;
+    }
+
+    location /vnc/ {
+        proxy_pass http://novnc_backend/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400s;
+    }
+
+    # myapp
+
+    location /myapp/ {
+        if ($auth_ok = 0) {
+            return 302 /login?next=$uri;
+        }
+        proxy_pass http://myapp_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding off;
+        gzip off;
+        add_header X-Accel-Buffering no always;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    # ── FastAPI (default) ──
+
+    location / {
+        proxy_pass http://fastapi_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding off;
+        gzip off;
+        add_header X-Accel-Buffering no always;
+
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+}
