@@ -54,6 +54,11 @@
                     "permissions": {
                         "contents": "write"
                     }
+                },
+                "physicar-ai/deepracer-simapp-mount": {
+                    "permissions": {
+                        "contents": "write"
+                    }
                 }
             }
         }
