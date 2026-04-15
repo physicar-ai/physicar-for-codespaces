@@ -66,6 +66,16 @@ echo -e "DEV=true\nSIM=true" | sudo tee /opt/physicar/.env > /dev/null
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo ln -sf "$PWD/.devcontainer/nginx.conf" /etc/nginx/sites-enabled/physicar
 
+# supervisord 로그 디렉토리 권한
+sudo mkdir -p /var/log/supervisor
+sudo chown -R $(whoami) /var/log/supervisor
+
+# 스크립트 실행 권한
+chmod +x "$PWD/.devcontainer/"*.sh
+
+# nginx(www-data)가 /home/physicar 경로를 통과할 수 있도록
+chmod o+x "$HOME"
+
 # ~/.bashrc 환경 설정
 cat >> ~/.bashrc << 'EOF'
 export DISPLAY=:1
@@ -78,6 +88,6 @@ EOF
 
 # Pull deepracer-simapp Docker image
 echo "$DOCKER_PASSWORD" | docker login -u physicar --password-stdin
-docker pull physicar/device-dev:1
+docker pull physicar/sim:1
 
 echo "[onCreate] Complete"
