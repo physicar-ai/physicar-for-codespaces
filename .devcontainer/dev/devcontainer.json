@@ -45,6 +45,16 @@
                         "contents": "write"
                     }
                 },
+                "physicar-ai/physicar-sim": {
+                    "permissions": {
+                        "contents": "write"
+                    }
+                },
+                "physicar-ai/physicar-ros": {
+                    "permissions": {
+                        "contents": "write"
+                    }
+                },
                 "physicar-ai/deepracer-simapp-mount": {
                     "permissions": {
                         "contents": "write"
