@@ -44,7 +44,8 @@
     "portsAttributes": {
         "80":{
             "label": "Physicar",
-            "onAutoForward": "openPreview"
+            "onAutoForward": "openPreview",
+            "visibility": "public"
         }
     }
 }

@@ -68,7 +68,7 @@ echo -e "SIM=true" | sudo tee /opt/physicar/.env > /dev/null
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo ln -sf "$PWD/.devcontainer/nginx.conf" /etc/nginx/sites-enabled/physicar
 
-# Pull physicar device v1 Docker image
-docker pull physicar/device:1
+# Pull physicar sim v1 Docker image
+docker pull physicar/sim:1
 
 echo "[onCreate] Complete"
