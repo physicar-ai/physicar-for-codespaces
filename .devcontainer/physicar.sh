@@ -32,18 +32,24 @@ if ! $IS_DEV; then
     fi
 fi
 
-if ! docker inspect physicar &>/dev/null; then
-  docker run -d \
-    --name physicar \
-    --restart unless-stopped \
-    --network host \
-    --ipc host \
-    -v "$PHYSICAR_DIR:$PHYSICAR_DIR" \
-    -v /home/physicar/physicar_ws/.devcontainer/physicar-ros:/root/ros2_ws/src/physicar-ros \
-    -v /tmp/.X11-unix:/tmp/.X11-unix \
-    -e TZ="$(cat /etc/timezone 2>/dev/null || echo UTC)" \
-    -e DISPLAY=":1" \
-    -e CODESPACE_NAME \
-    "$IMAGE_NAME" \
-    bash -c 'bash /root/ros2_ws/src/physicar-ros/entrypoint.sh || sleep infinity'
+# Start container if not running (handles Exited state after Codespaces suspend/resume)
+if ! docker ps --filter name=physicar --filter status=running -q | grep -q .; then
+  if docker inspect physicar &>/dev/null; then
+    # Container exists but stopped — just restart (preserves built workspace)
+    docker start physicar &>/dev/null
+  else
+    docker run -d \
+      --name physicar \
+      --restart unless-stopped \
+      --network host \
+      --ipc host \
+      -v "$PHYSICAR_DIR:$PHYSICAR_DIR" \
+      -v /home/physicar/physicar_ws/.devcontainer/physicar-ros:/root/ros2_ws/src/physicar-ros \
+      -v /tmp/.X11-unix:/tmp/.X11-unix \
+      -e TZ="$(cat /etc/timezone 2>/dev/null || echo UTC)" \
+      -e DISPLAY=":1" \
+      -e CODESPACE_NAME \
+      "$IMAGE_NAME" \
+      bash -c 'bash /root/ros2_ws/src/physicar-ros/entrypoint.sh || sleep infinity'
+  fi
 fi
