@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <resistance>
+    <strength>10</strength>
+    <screen_edge_strength>20</screen_edge_strength>
+  </resistance>
+  <applications>
+    <application class="*" type="normal">
+      <maximized>yes</maximized>
+      <size>
+        <width>100%</width>
+        <height>100%</height>
+      </size>
+      <position force="yes">
+        <x>0</x>
+        <y>0</y>
+      </position>
+    </application>
+  </applications>
+  <desktops>
+    <number>1</number>
+  </desktops>
+  <mouse>
+    <context name="Close">
+      <mousebind button="Left" action="Click">
+        <action name="Close"/>
+      </mousebind>
+    </context>
+    <context name="Iconify">
+      <mousebind button="Left" action="Click">
+        <action name="Iconify"/>
+      </mousebind>
+    </context>
+    <context name="Maximize">
+      <mousebind button="Left" action="Click"></mousebind>
+    </context>
+  </mouse>
+</openbox_config>

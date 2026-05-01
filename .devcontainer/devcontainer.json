@@ -1,0 +1,51 @@
+{
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    },
+    "remoteUser": "physicar",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/home/physicar/physicar_ws,type=bind,consistency=cached",
+    "workspaceFolder": "/home/physicar/physicar_ws",
+    "hostRequirements": {"cpus": 4},
+    "onCreateCommand": "bash .devcontainer/onCreate.sh",
+    "postCreateCommand": "bash .devcontainer/postCreate.sh",
+    "postStartCommand": "bash .devcontainer/postStart.sh",
+    "postAttachCommand": "bash .devcontainer/postAttach.sh",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "GitHub.copilot",
+                "ms-python.python",
+                "ms-toolsai.jupyter"
+            ],
+            "settings": {
+                "files.exclude": {".devcontainer": true},
+                "chat.sendElementsToChat.enabled": false,
+                "markdown.preview.doubleClickToSwitchToEditor": false,
+                "workbench.editorAssociations": {
+                    "*.md": "vscode.markdown.preview.editor"
+                },
+                "explorer.compactFolders": false,
+                "python.defaultInterpreterPath": "/usr/bin/python3",
+                "jupyter.notebookFileRoot": "${workspaceFolder}",
+                "notebook.defaultKernel": {
+                    "id": "python3",
+                    "path": "/usr/bin/python3"
+                },
+                "workbench.trustedDomains": [
+                    "https://physicar.ai"
+                ]
+            }
+        }
+    },
+    "forwardPorts": [80, 8001],
+    "portsAttributes": {
+        "80":{
+            "label": "Physicar",
+            "onAutoForward": "openPreview",
+            "visibility": "public"
+        }
+    }
+}

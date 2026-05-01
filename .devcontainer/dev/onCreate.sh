@@ -1,0 +1,113 @@
+#!/bin/bash
+
+# Install essential packages
+sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    curl gnupg2 lsb-release software-properties-common apt-transport-https ca-certificates locales \
+    xvfb x11vnc novnc websockify xterm supervisor net-tools lxde-core lxterminal \
+    jq python3-pip docker-compose tmux ffmpeg gh \
+    nginx openbox tint2 xterm alsa-utils python3-dev
+
+# noVNC symlink
+sudo ln -sf vnc_lite.html /usr/share/novnc/index.html 2>/dev/null || true
+
+# noVNC auto-reconnect patch - reload page 2s after disconnect
+sudo sed -i 's|status("Something went wrong, connection is closed");|status("Reconnecting..."); setTimeout(function(){location.reload();},2000); return;|' /usr/share/novnc/vnc_lite.html 2>/dev/null || true
+sudo sed -i 's|status("Disconnected");|status("Reconnecting..."); setTimeout(function(){location.reload();},2000); return;|' /usr/share/novnc/vnc_lite.html 2>/dev/null || true
+
+# Openbox / tint2 config
+sudo mkdir -p /etc/xdg/openbox
+mkdir -p ~/.config/tint2
+sudo ln -sf "$PWD/.devcontainer/rc.xml"    /etc/xdg/openbox/rc.xml
+ln -sf "$PWD/.devcontainer/tint2rc" ~/.config/tint2/tint2rc
+sudo ln -sf "$PWD/.devcontainer/xterm.desktop" /usr/share/applications/xterm.desktop
+
+# ROS 2 Jazzy
+if [ ! -f /opt/ros/jazzy/setup.bash ]; then
+  sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+    -o /usr/share/keyrings/ros-archive-keyring.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" \
+    | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+  sudo apt-get update -y
+  sudo apt-get install -y --no-install-recommends \
+    ros-jazzy-ros-base \
+    ros-jazzy-image-transport \
+    ros-jazzy-image-transport-plugins \
+    ros-jazzy-cv-bridge \
+    ros-jazzy-xacro \
+    python3-rosdep \
+    python3-colcon-common-extensions
+
+  source /opt/ros/jazzy/setup.bash
+  sudo rosdep init 2>/dev/null || true
+  rosdep update --rosdistro jazzy 2>/dev/null || true
+fi
+
+# Gazebo Harmonic
+if ! command -v gz &>/dev/null; then
+  sudo curl -fsSL https://packages.osrfoundation.org/gazebo.gpg \
+    -o /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" \
+    | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
+  sudo apt-get update -y
+  sudo apt-get install -y gz-harmonic ros-jazzy-ros-gz
+fi
+
+# pip install
+# Set pip to allow breaking system packages
+pip3 config set global.break-system-packages true
+
+# physicar-python & physicar-sim
+git submodule update --init
+pip3 install -e "$PWD/.devcontainer/physicar-python"
+
+pip3 install --no-cache-dir \
+  flask flask-cors pyyaml requests \
+  python-multipart \
+  setuptools==70.0.0 2>/dev/null || true
+
+# Keep numpy at the system-compatible version
+pip3 install --break-system-packages --force-reinstall numpy==1.26.4 2>/dev/null || true
+
+# /opt/physicar directory
+sudo mkdir -p /opt/physicar
+echo -e "DEV=true\nSIM=true" | sudo tee /opt/physicar/.env > /dev/null
+
+# nginx config
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo ln -sf "$PWD/.devcontainer/nginx.conf" /etc/nginx/sites-enabled/physicar
+
+# supervisord log directory permissions
+sudo mkdir -p /var/log/supervisor
+sudo chown -R $(whoami) /var/log/supervisor
+
+# Script execute permissions
+chmod +x "$PWD/.devcontainer/"*.sh
+
+# Allow nginx (www-data) to traverse /home/physicar
+chmod o+x "$HOME"
+
+# ~/.bashrc environment setup
+cat >> ~/.bashrc << 'EOF'
+
+# physicar
+export DISPLAY=:1
+export GZ_PARTITION=physicar
+export GZ_CONFIG_PATH=/usr/share/gz
+source /opt/ros/jazzy/setup.bash
+source ~/physicar_ws/install/setup.bash 2>/dev/null || true
+eval "$(register-python-argcomplete ros2)"
+eval "$(register-python-argcomplete colcon)"
+EOF
+
+# physicar-myapp
+sudo mkdir -p /opt/physicar/myapp
+sudo chown -R physicar:physicar /opt/physicar/myapp
+
+# Install flask for the host physicar user so the student app can use it immediately.
+sudo -u physicar python3 -m pip install --break-system-packages --user 'flask==3.1.3' 'flask-cors==4.0.2'
+
+# Pull physicar sim v1 Docker image
+echo "$DOCKER_PASSWORD" | docker login -u physicar --password-stdin
+docker pull physicar/sim:1
+
+echo "[onCreate] Complete"
