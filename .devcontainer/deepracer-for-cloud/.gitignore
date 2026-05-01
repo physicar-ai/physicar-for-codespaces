@@ -1,0 +1,17 @@
+.vscode/
+# custom_files/
+logs/
+docker/volumes/
+recording/
+recording
+/*.env
+/*.bak
+/*.tar
+/*.json
+DONE
+data/
+tmp/
+autorun.s3url
+nohup.out
+/*.sh
+_
