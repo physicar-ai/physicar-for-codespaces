@@ -32,7 +32,6 @@ if ! $IS_DEV; then
     fi
 fi
 
-# Run container
 if ! docker inspect physicar &>/dev/null; then
   docker run -d \
     --name physicar \

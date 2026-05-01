@@ -52,6 +52,13 @@ if ! command -v gz &>/dev/null; then
   sudo apt-get install -y gz-harmonic ros-jazzy-ros-gz
 fi
 
+# SLAM/Nav2 packages for host-side navigation practice
+sudo apt-get install -y --no-install-recommends \
+  ros-jazzy-slam-toolbox \
+  ros-jazzy-navigation2 \
+  ros-jazzy-nav2-bringup \
+  ros-jazzy-rviz2
+
 # pip install
 # Set pip to allow breaking system packages
 pip3 config set global.break-system-packages true
@@ -71,6 +78,7 @@ pip3 install --break-system-packages --force-reinstall numpy==1.26.4 2>/dev/null
 # /opt/physicar directory
 sudo mkdir -p /opt/physicar
 echo -e "DEV=true\nSIM=true" | sudo tee /opt/physicar/.env > /dev/null
+
 
 # nginx config
 sudo rm -f /etc/nginx/sites-enabled/default
@@ -93,6 +101,8 @@ cat >> ~/.bashrc << 'EOF'
 export DISPLAY=:1
 export GZ_PARTITION=physicar
 export GZ_CONFIG_PATH=/usr/share/gz
+export FASTRTPS_DEFAULT_PROFILES_FILE=~/physicar_ws/.devcontainer/physicar-ros/fastdds-lo.xml
+export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
 source /opt/ros/jazzy/setup.bash
 source ~/physicar_ws/install/setup.bash 2>/dev/null || true
 eval "$(register-python-argcomplete ros2)"
@@ -109,5 +119,11 @@ sudo -u physicar python3 -m pip install --break-system-packages --user 'flask==3
 # Pull physicar sim v1 Docker image
 echo "$DOCKER_PASSWORD" | docker login -u physicar --password-stdin
 docker pull physicar/sim:1
+
+# Initial build - start container and wait for build to complete
+echo "[onCreate] Starting initial build..."
+bash "$PWD/.devcontainer/physicar.sh"
+while ! docker logs physicar 2>&1 | grep -q "Build succeeded\|launch"; do sleep 5; done
+echo "[onCreate] Initial build complete"
 
 echo "[onCreate] Complete"
