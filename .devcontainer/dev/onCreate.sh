@@ -55,13 +55,29 @@ fi
 # SLAM/Nav2 packages for host-side navigation practice
 sudo apt-get install -y --no-install-recommends \
   ros-jazzy-slam-toolbox \
+  ros-jazzy-cartographer-ros \
   ros-jazzy-navigation2 \
   ros-jazzy-nav2-bringup \
-  ros-jazzy-rviz2
+  ros-jazzy-nav2-rviz-plugins \
+  ros-jazzy-rviz2 \
+  ros-jazzy-tf2-tools \
+  ros-jazzy-rqt-tf-tree \
+  ros-jazzy-rqt-graph \
+  ros-jazzy-teleop-twist-keyboard
+
+# Prevent automatic package upgrades (lock installed versions)
+sudo apt-mark hold $(dpkg -l | grep -E '^ii  (ros-jazzy|gz-|libgz-)' | awk '{print $2}') 2>/dev/null || true
+sudo sed -i 's|APT::Periodic::Unattended-Upgrade "1"|APT::Periodic::Unattended-Upgrade "0"|' /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null || true
 
 # pip install
 # Set pip to allow breaking system packages
 pip3 config set global.break-system-packages true
+
+# Pin numpy<2 globally (cv_bridge C++ ABI requires numpy 1.x)
+sudo mkdir -p /etc/pip
+echo 'numpy<2' | sudo tee /etc/pip/constraints.txt > /dev/null
+echo 'PIP_CONSTRAINT=/etc/pip/constraints.txt' | sudo tee -a /etc/environment > /dev/null
+export PIP_CONSTRAINT=/etc/pip/constraints.txt
 
 # physicar-python & physicar-sim
 git submodule update --init
@@ -71,9 +87,6 @@ pip3 install --no-cache-dir \
   flask flask-cors pyyaml requests \
   python-multipart \
   setuptools==70.0.0 2>/dev/null || true
-
-# Keep numpy at the system-compatible version
-pip3 install --break-system-packages --force-reinstall numpy==1.26.4 2>/dev/null || true
 
 # /opt/physicar directory
 sudo mkdir -p /opt/physicar
@@ -113,8 +126,9 @@ EOF
 sudo mkdir -p /opt/physicar/myapp
 sudo chown -R physicar:physicar /opt/physicar/myapp
 
-# Install flask for the host physicar user so the student app can use it immediately.
-sudo -u physicar python3 -m pip install --break-system-packages --user 'flask==3.1.3' 'flask-cors==4.0.2'
+# Install flask & ultralytics for the host physicar user so the student app can use them immediately.
+# numpy<2 is required because ultralytics pulls numpy 2.x which breaks cv_bridge (compiled against numpy 1.x)
+sudo -u physicar python3 -m pip install --break-system-packages --user 'flask~=3.1' 'flask-cors~=4.0' 'ultralytics~=8.4' 'numpy<2'
 
 # Pull physicar sim v1 Docker image
 echo "$DOCKER_PASSWORD" | docker login -u physicar --password-stdin
