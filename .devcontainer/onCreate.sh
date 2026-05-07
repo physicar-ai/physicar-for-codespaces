@@ -120,7 +120,7 @@ for repo in .devcontainer/physicar-sim .devcontainer/physicar-ros; do
     abs_git_dir="$(cd "$repo" && cd "$(git rev-parse --git-dir)" && pwd)"
     rm "$repo/.git"
     mv "$abs_git_dir" "$repo/.git"
-    git -C "$repo" config --unset core.worktree 2>/dev/null || true
+    sed -i '/worktree = /d' "$repo/.git/config"
 done
 rm -rf .git .gitignore .gitmodules
 
