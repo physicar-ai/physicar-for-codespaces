@@ -12,7 +12,7 @@ if ! $IS_DEV; then
     pip3 install --upgrade 'physicar~='"$(python3 -c "import physicar; print(physicar.__version__)")" 2>/dev/null
     
     # Update physicar-sim to latest tag (v1.*)
-    # (physicar-ros is updated inside the Docker container)
+    # (physicar-ros is updated inside the Docker container via updater.sh)
     for repo in physicar-sim; do
         dir="$SCRIPT_DIR/$repo"
         [[ -d "$dir/.git" ]] || continue
