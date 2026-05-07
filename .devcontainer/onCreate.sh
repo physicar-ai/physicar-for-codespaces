@@ -60,6 +60,8 @@ sudo apt-get install -y --no-install-recommends \
   ros-jazzy-nav2-bringup \
   ros-jazzy-nav2-rviz-plugins \
   ros-jazzy-rviz2 \
+  ros-jazzy-rqt \
+  ros-jazzy-rqt-common-plugins \
   ros-jazzy-tf2-tools \
   ros-jazzy-rqt-tf-tree \
   ros-jazzy-rqt-graph \
@@ -124,6 +126,9 @@ for repo in .devcontainer/physicar-sim .devcontainer/physicar-ros; do
 done
 rm -rf .git .gitignore .gitmodules
 
+# Symlink ~/physicar-ros for path consistency with real kit
+ln -sfn "$PWD/.devcontainer/physicar-ros" ~/physicar-ros
+
 pip3 install --no-cache-dir \
   flask flask-cors pyyaml requests \
   python-multipart \
@@ -154,7 +159,7 @@ cat >> ~/.bashrc << 'EOF'
 export DISPLAY=:1
 export GZ_PARTITION=physicar
 export GZ_CONFIG_PATH=/usr/share/gz
-export PHYSICAR_ROS_DIR=~/physicar_ws/.devcontainer/physicar-ros
+export PHYSICAR_ROS_DIR=~/physicar-ros
 export FASTRTPS_DEFAULT_PROFILES_FILE=$PHYSICAR_ROS_DIR/fastdds-lo.xml
 export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
 export SLAM_PARAMS_FILE=$PHYSICAR_ROS_DIR/physicar_bringup/config/slam_params.yaml
@@ -172,8 +177,8 @@ sudo chown -R physicar:physicar /opt/physicar/myapp
 # Install flask & ultralytics for the host physicar user so the student app can use them immediately.
 sudo -u physicar python3 -m pip install --break-system-packages --user 'flask~=3.1' 'flask-cors~=4.0' 'ultralytics~=8.4' 'numpy<2'
 
-# Pull physicar sim v1 Docker image
-docker pull physicar/sim:1
+# Pre-pull container image so first physicar.sh run doesn't have to wait
+docker compose -f "$PWD/.devcontainer/physicar-ros/docker-compose.yml" --profile sim pull 2>/dev/null || true
 
 # Initial build - start container and wait for build to complete
 echo "[onCreate] Starting initial build..."
