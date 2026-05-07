@@ -42,12 +42,5 @@
             }
         }
     },
-    "forwardPorts": [80, 8001],
-    "portsAttributes": {
-        "80":{
-            "label": "Physicar",
-            "onAutoForward": "openPreview",
-            "visibility": "public"
-        }
-    }
+    "forwardPorts": [80]
 }
