@@ -69,6 +69,37 @@ sudo apt-get install -y --no-install-recommends \
 sudo apt-mark hold $(dpkg -l | grep -E '^ii  (ros-jazzy|gz-|libgz-)' | awk '{print $2}') 2>/dev/null || true
 sudo sed -i 's|APT::Periodic::Unattended-Upgrade "1"|APT::Periodic::Unattended-Upgrade "0"|' /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null || true
 
+# Patch nav2 navigation_launch.py: disable docking_server & route_server
+# (PhysiCar doesn't use docking or route planning)
+NAV2_LAUNCH=/opt/ros/jazzy/share/nav2_bringup/launch/navigation_launch.py
+if grep -q "'route_server'," "$NAV2_LAUNCH" 2>/dev/null; then
+  sudo python3 -c "
+import re
+with open('$NAV2_LAUNCH') as f: c = f.read()
+for old, new in [
+    (\"        'route_server',\\n\", \"        # 'route_server',  # disabled for physicar\\n\"),
+    (\"        'docking_server',\\n\", \"        # 'docking_server',  # disabled for physicar\\n\"),
+]:
+    c = c.replace(old, new)
+for pkg, exe, plugin in [
+    ('nav2_route', 'route_server', 'nav2_route::RouteServer'),
+    ('opennav_docking', 'opennav_docking', 'opennav_docking::DockingServer'),
+]:
+    # Non-composed Node blocks
+    c = re.sub(
+        r\"(            )(Node\\(\\n\\s+package='\" + pkg + r\"'.*?remappings=remappings,\\n\\s+\\),)\",
+        lambda m: m.group(1) + '# ' + m.group(2).replace('\\n', '\\n' + m.group(1) + '# '),
+        c, count=1, flags=re.DOTALL)
+    # ComposableNode blocks
+    c = re.sub(
+        r\"(                    )(ComposableNode\\(\\n\\s+package='\" + pkg + r\"'.*?remappings=remappings,\\n\\s+\\),)\",
+        lambda m: m.group(1) + '# ' + m.group(2).replace('\\n', '\\n' + m.group(1) + '# '),
+        c, count=1, flags=re.DOTALL)
+with open('$NAV2_LAUNCH', 'w') as f: f.write(c)
+print('nav2 navigation_launch.py patched')
+"
+fi
+
 # pip install
 # Set pip to allow breaking system packages
 pip3 config set global.break-system-packages true
@@ -114,8 +145,11 @@ cat >> ~/.bashrc << 'EOF'
 export DISPLAY=:1
 export GZ_PARTITION=physicar
 export GZ_CONFIG_PATH=/usr/share/gz
-export FASTRTPS_DEFAULT_PROFILES_FILE=~/physicar_ws/.devcontainer/physicar-ros/fastdds-lo.xml
+export PHYSICAR_ROS_DIR=~/physicar_ws/.devcontainer/physicar-ros
+export FASTRTPS_DEFAULT_PROFILES_FILE=$PHYSICAR_ROS_DIR/fastdds-lo.xml
 export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
+export SLAM_PARAMS_FILE=$PHYSICAR_ROS_DIR/physicar_bringup/config/slam_params.yaml
+export NAV2_PARAMS_FILE=$PHYSICAR_ROS_DIR/physicar_bringup/config/nav2_params.yaml
 source /opt/ros/jazzy/setup.bash
 source ~/physicar_ws/install/setup.bash 2>/dev/null || true
 eval "$(register-python-argcomplete ros2)"

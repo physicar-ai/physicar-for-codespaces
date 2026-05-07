@@ -1,6 +1,7 @@
 app.physicar
 .github/
 .vscode/
+.env
 build/
 install/
 log/
