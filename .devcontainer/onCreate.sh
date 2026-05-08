@@ -14,9 +14,15 @@ pip3 config set global.break-system-packages true
 pip3 install awscli
 
 # physicar-python & deepracer-simapp-mount
-git submodule update --init .devcontainer/deepracer-simapp-mount
 pip3 install physicar[codespaces-deepracer]
-rm -rf .git .gitignore .gitmodules
+git submodule update --init .devcontainer/deepracer-simapp-mount
+
+# Convert submodules to standalone git repos (so updater can fetch/checkout later)
+repo=".devcontainer/deepracer-simapp-mount"
+abs_git_dir="$(cd "$repo" && cd "$(git rev-parse --git-dir)" && pwd)"
+rm "$repo/.git"
+mv "$abs_git_dir" "$repo/.git"
+git -C "$repo" config --unset core.worktree 2>/dev/null || true
 
 # Pull deepracer-simapp Docker image
 docker pull physicar/deepracer-simapp

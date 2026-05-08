@@ -10,7 +10,7 @@ PHYSICAR_PYTHON_PKG="$(python3 -c 'import physicar, os; print(os.path.dirname(os
 
 RELOAD_DIR="${PHYSICAR_PYTHON_DEV}"
 if [ ! -d "$RELOAD_DIR" ]; then
-    pip3 install --upgrade 'physicar[codespaces-deepracer]~='"$(python3 -c "import physicar; print(physicar.__version__)")" 2>/dev/null
+    pip3 install --upgrade 'physicar[codespaces-deepracer]' 2>/dev/null
     git -C "$WORKSPACE/.devcontainer/deepracer-simapp-mount" pull 2>/dev/null
     RELOAD_DIR="$PHYSICAR_PYTHON_PKG"
 fi

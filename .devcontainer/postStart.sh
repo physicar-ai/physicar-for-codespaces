@@ -9,6 +9,7 @@ sudo chattr +i app.physicar
 ) 2>/dev/null &
 
 # Start supervisord
+(
 if command -v supervisord &> /dev/null; then
     # Clean up existing processes
     pkill -f "supervisord.*supervisord.conf" 2>/dev/null || true
@@ -18,4 +19,5 @@ if command -v supervisord &> /dev/null; then
     supervisord -c ~/physicar_ws/.devcontainer/supervisord.conf
     sleep 2
 fi
+) &
 
