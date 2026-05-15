@@ -5,7 +5,8 @@ sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     curl gnupg2 lsb-release software-properties-common apt-transport-https ca-certificates locales \
     xvfb x11vnc novnc websockify xterm supervisor net-tools lxde-core lxterminal \
     jq python3-pip docker-compose tmux ffmpeg gh \
-    nginx openbox tint2 xterm alsa-utils python3-dev
+    nginx openbox tint2 xterm alsa-utils python3-dev \
+    fonts-noto fonts-noto-cjk fonts-noto-cjk-extra fonts-noto-color-emoji
 
 # noVNC symlink
 sudo ln -sf vnc_lite.html /usr/share/novnc/index.html 2>/dev/null || true
@@ -175,7 +176,7 @@ sudo mkdir -p /opt/physicar/myapp
 sudo chown -R physicar:physicar /opt/physicar/myapp
 
 # Install flask & ultralytics for the host physicar user so the student app can use them immediately.
-sudo -u physicar python3 -m pip install --break-system-packages --user 'flask~=3.1' 'flask-cors~=4.0' 'ultralytics~=8.4' 'numpy<2'
+sudo -u physicar python3 -m pip install --break-system-packages --user 'flask~=3.1' 'flask-cors~=4.0' 'requests~=2.32' 'ultralytics~=8.4' 'numpy<2'
 
 # Pre-pull container image so first physicar.sh run doesn't have to wait
 docker compose -f "$PWD/.devcontainer/physicar-ros/docker-compose.yml" --profile sim pull 2>/dev/null || true
