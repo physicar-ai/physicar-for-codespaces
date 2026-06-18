@@ -1,0 +1,5 @@
+app.physicar
+.github/
+.vscode/
+.devcontainer/physicar-python/
+.devcontainer/deepracer-simapp-mount/
