@@ -2,6 +2,15 @@
 
 This workspace (`/home/physicar/physicar_ws`) runs the **PhysiCar** robot in a simulation environment, so you can develop and test autonomous driving without real hardware. The simulation exposes the **same ROS 2 topics and Web API** as the real robot, so code written here runs unchanged on an actual PhysiCar. 
 
+## Getting Started
+
+- Click **[`app.physicar`](app.physicar)** in the Explorer on the left to open the UI-based workspace (PhysiCar Studio) right inside the editor.
+- The view is split into left and right panels, and each panel lets you choose which workspace to show.
+  - **Home** — Dashboard home (Control, Agent, DeepRacer, etc.)
+  - **Simulation** — 3D simulation view
+  - **VNC** — Linux desktop (terminal and GUI tools)
+  - **MyApp** — Your own app (port 5000)
+
 ## PhysiCar Sim
 
 The Gazebo Harmonic based simulation environment for **PhysiCar AI**
