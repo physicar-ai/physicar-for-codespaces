@@ -9,7 +9,8 @@
     "workspaceMount": "source=${localWorkspaceFolder},target=/home/physicar/physicar_ws,type=bind,consistency=cached",
     "workspaceFolder": "/home/physicar/physicar_ws",
     "hostRequirements": {"cpus": 4},
-    // "onCreateCommand": "bash .devcontainer/onCreate.sh",
+    // Runs once at creation (and during prebuild), cwd = the workspace folder.
+    "onCreateCommand": "bash .devcontainer/onCreate.sh",
     // "postCreateCommand": "bash .devcontainer/postCreate.sh",
     "postStartCommand": "bash /opt/physicar/src/physicar-ros/deploy/sim/entrypoint.sh",
     "postAttachCommand": "bash /opt/physicar/src/physicar-ros/deploy/sim/postAttach.sh",
