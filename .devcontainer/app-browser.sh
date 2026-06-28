@@ -62,10 +62,19 @@ wait_reachable() {
 }
 
 # (Re)start cloudflared, killing any previous instance first.
+#
+# --protocol http2 (TCP) instead of the default quic (UDP). In Codespaces the QUIC
+# data path is unreliable: cloudflared registers the connection and the URL is
+# minted, but the public hostname stays unreachable (curl returns 000 / "refused to
+# connect" in the browser) -- the UDP egress is throttled/dropped. This made
+# wait_reachable below fail for 120s on every tunnel and re-tunnel forever, leaving
+# app.physicar empty. Forcing HTTP/2 (TCP) makes the quick tunnel reachable within
+# seconds. (The "failed to increase receive buffer size" QUIC warning in the log is
+# harmless and unrelated.)
 start_tunnel() {
   [ -n "${CF_PID:-}" ] && kill "$CF_PID" 2>/dev/null
   : > "$LOG"
-  cloudflared tunnel --url "http://localhost:${PORT}" --no-autoupdate > "$LOG" 2>&1 &
+  cloudflared tunnel --url "http://localhost:${PORT}" --no-autoupdate --protocol http2 > "$LOG" 2>&1 &
   CF_PID=$!
 }
 
