@@ -1,21 +1,23 @@
 #!/bin/bash
 # Cloudflare Quick Tunnel for GitHub Codespaces (token-gated).
 #
-# GitHub Codespaces port forwarding ("<name>-8000.app.github.dev") is unreliable
-# and intermittently returns 404 even when the port is up. To work around this we
-# expose uvicorn:8000 through a trycloudflare.com quick tunnel and write the
-# resulting public URL into app.physicar (the browser-preview extension opens
-# this URL as the Studio bookmark).
+# Publishes the app's reachable URLs into app.physicar (one per line), which the
+# browser-preview extension opens as the Studio bookmark. The extension tries the
+# lines in order and locks onto whichever actually renders.
+#
+# Lines are written incrementally, as each transport becomes available:
+#   line 1: <name>-8000.app.github.dev   -- as soon as uvicorn:8000 is listening
+#   line 2: <label>.trycloudflare.com    -- once the quick tunnel is reachable
+# github.dev port-forwarding is fast but intermittently flaky, so the tunnel is
+# offered as a second option; the extension picks whichever works.
 #
 # The tunnel URL is public, so to prevent unauthorized access if it leaks we mint
-# a per-session 512-bit token. The token is written to /tmp/pc-token and the
-# FastAPI middleware (_TunnelTokenGate) checks it on every request. There is no
-# nginx, so no reload is needed.
+# a per-session 512-bit token, written to /tmp/pc-token; the FastAPI middleware
+# (_TunnelTokenGate) checks it on trycloudflare traffic. github.dev is gated by
+# GitHub's own auth, so its line carries no token.
 #
-# Managed by supervisord (codespace-only). Each (re)start mints a fresh URL/token
-# and rewrites the bookmark, so a dropped tunnel self-heals. If a freshly-minted
-# tunnel does not become reachable in time, it is discarded and a new one is
-# minted (re-tunneling) rather than falling back to the flaky github.dev URL.
+# Managed by supervisord (codespace-only). Each (re)start re-publishes the
+# bookmark and re-tunnels until reachable, so a dropped tunnel self-heals.
 set -uo pipefail
 
 APP_FILE="$HOME/physicar_ws/app.physicar"
@@ -61,6 +63,14 @@ wait_reachable() {
   return 1
 }
 
+# Wait until uvicorn is actually listening on localhost:$PORT. curl exits 0 once
+# it gets any HTTP response (even 404), non-zero while the connection is refused.
+wait_port() {
+  while ! curl -s -o /dev/null --max-time 2 "http://localhost:${PORT}/"; do
+    sleep 1
+  done
+}
+
 # (Re)start cloudflared, killing any previous instance first.
 #
 # --protocol http2 (TCP) instead of the default quic (UDP). In Codespaces the QUIC
@@ -85,21 +95,28 @@ trap 'kill "$CF_PID" 2>/dev/null' TERM INT
 # survives re-tunneling below).
 TOKEN="$(openssl rand -hex 64)"
 
-# 1) Seed an empty bookmark first so a stale trycloudflare URL from a previous
-#    run never lingers while the new tunnel is coming up.
+# 1) Clear the bookmark so a stale URL from a previous run never lingers.
 write_bookmark ""
 set_gate_token ""
 
-# 2) Keep (re)tunneling until we have a URL that is actually reachable. A fresh
-#    quick-tunnel hostname can take a while to propagate; rather than fall back to
-#    the flaky github.dev URL, we give each tunnel up to ~120s to become reachable
-#    and otherwise discard it and mint a new one. trycloudflare is reliable, so
-#    this normally succeeds on the first round.
-# -a: treat the log as text. Once Studio opens its SSE streams through the tunnel,
-# cloudflared's log can pick up non-UTF8 bytes; without -a grep prints "Binary
-# file matches" instead of the URL and extraction silently fails.
-# The host is matched as multi-label (>=2 hyphen-joined words) so cloudflared's
-# control endpoint api.trycloudflare.com is never mistaken for the tunnel URL.
+# 2) As soon as uvicorn is listening on :8000, publish line 1 (the GitHub
+#    Codespaces port-forward). It doesn't depend on the tunnel, so the extension
+#    can start trying it immediately while the tunnel comes up below. No token --
+#    github.dev is gated by GitHub's own auth, not _TunnelTokenGate.
+GH_URL="https://${CODESPACE_NAME}-${PORT}.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-app.github.dev}/"
+wait_port
+write_bookmark "$GH_URL"
+echo "[app-browser] line 1 published (github.dev)"
+
+# 3) Bring up the trycloudflare tunnel; once its hostname is actually reachable
+#    from the public internet, append line 2. Keep (re)tunneling until reachable
+#    rather than publishing a not-yet-live hostname (which the browser would
+#    negative-cache as NXDOMAIN).
+# -a: treat the log as text -- once the app's SSE streams flow through the tunnel,
+# cloudflared's log can pick up non-UTF8 bytes and grep would print "Binary file
+# matches" instead of the URL. The host is matched as multi-label (>=2 hyphen-
+# joined words) so the control endpoint api.trycloudflare.com is never mistaken
+# for the tunnel URL.
 while true; do
   start_tunnel
 
@@ -116,19 +133,17 @@ while true; do
     continue
   fi
 
-  # Publish only once the edge actually answers, so the browser never
-  # negative-caches an NXDOMAIN for the not-yet-propagated hostname.
   if wait_reachable "$URL" 120; then
     set_gate_token "$TOKEN"
-    write_bookmark "${URL}/?token=${TOKEN}"
-    echo "[app-browser] public URL: ${URL}/ (token-gated)"
+    # Line 2: trycloudflare (token-gated). The extension derives the blocked-
+    # network fallback from this line, so it isn't written here.
+    CF_URL="${URL}/?token=${TOKEN}"
+    write_bookmark "$(printf '%s\n%s' "$GH_URL" "$CF_URL")"
+    echo "[app-browser] line 2 published (trycloudflare)"
     break
   fi
   echo "[app-browser] ${URL} not reachable after 120s; re-tunneling" >&2
 done
 
-# 3) Stay tied to the tunnel so supervisord can supervise/restart it.
-wait "$CF_PID"
-
-# 5) Stay tied to the tunnel so supervisord can supervise/restart it.
+# Stay tied to the tunnel so supervisord can supervise/restart it.
 wait "$CF_PID"

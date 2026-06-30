@@ -1,4 +1,4 @@
-app.physicar
+*.physicar
 .github/
 .vscode/
 .devcontainer/physicar-python/
