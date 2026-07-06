@@ -1,0 +1,14 @@
+app.physicar
+.github/
+.vscode/
+.env
+.venv/
+venv/
+build/
+install/
+log/
+tmp/
+*.log
+__pycache__/
+deepracer/
+myapp/
