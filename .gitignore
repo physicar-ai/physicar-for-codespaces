@@ -1,0 +1,9 @@
+app.physicar
+.github/
+.vscode/
+__pycache__/
+tmp/
+reward_function.py
+.devcontainer/physicar-python/
+.devcontainer/deepracer-simapp-mount/
+chat/

@@ -1,0 +1,251 @@
+#!/bin/bash
+##############
+# Parsing minimal argument: if first arg is '--minio'
+unset MINIO_START
+if [[ "$1" == "--minio" ]]; then
+  MINIO_START="true"
+fi
+
+verlte() {
+  [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
+}
+
+function dr-update-env {
+
+  if [[ -f "$DIR/system.env" ]]; then
+    set -o allexport
+    source <(grep -v '^#' "$DIR/system.env")
+    set +o allexport
+  else
+    echo "File system.env does not exist."
+    return 1
+  fi
+
+  if [[ -f "$DIR/run.env" ]]; then
+    set -o allexport
+    source <(grep -v '^#' "$DIR/run.env")
+    set +o allexport
+  else
+    echo "File run.env does not exist."
+    return 1
+  fi
+
+  if [[ -z "${DR_RUN_ID}" ]]; then
+    export DR_RUN_ID=0
+  fi
+
+  if [[ "${DR_DOCKER_STYLE,,}" == "swarm" ]]; then
+    export DR_ROBOMAKER_TRAIN_PORT=$(expr 8080 + $DR_RUN_ID)
+    export DR_ROBOMAKER_EVAL_PORT=$(expr 8180 + $DR_RUN_ID)
+    export DR_ROBOMAKER_GUI_PORT=$(expr 5900 + $DR_RUN_ID)
+  else
+    export DR_ROBOMAKER_TRAIN_PORT="8080-8089"
+    export DR_ROBOMAKER_EVAL_PORT="8080-8089"
+    export DR_ROBOMAKER_GUI_PORT="5910-5919"
+  fi
+
+  # Setting the default region to ensure that things work also in the
+  # non default regions.
+  export AWS_DEFAULT_REGION=${DR_AWS_APP_REGION}
+
+}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+DIR="$(dirname $SCRIPT_DIR)"
+export DR_DIR=$DIR
+
+if [[ -f "$1" ]]; then
+  export DR_CONFIG=$(readlink -f $1)
+  dr-update-env
+elif [[ -f "$DIR/run.env" ]]; then
+  export DR_CONFIG="$DIR/run.env"
+  dr-update-env
+else
+  echo "No configuration file."
+  return 1
+fi
+
+# Check if Docker runs -- if not, then start it.
+if [[ "$(type service 2>/dev/null)" ]]; then
+  service docker status >/dev/null 2>&1 || sudo service docker start 2>/dev/null
+fi
+
+## Check if WSL2
+if grep -qi Microsoft /proc/version && grep -q "WSL2" /proc/version; then
+    IS_WSL2="yes"
+fi
+
+# Check if we will use Docker Swarm or Docker Compose
+# If not defined then use Swarm
+if [[ -z "${DR_DOCKER_STYLE}" ]]; then
+  export DR_DOCKER_STYLE="swarm"
+fi
+
+if [[ "${DR_DOCKER_STYLE,,}" == "swarm" ]]; then
+  export DR_DOCKER_FILE_SEP="-c"
+  SWARM_NODE=$(docker node inspect self | jq .[0].ID -r)
+  SWARM_NODE_UPDATE=$(docker node update --label-add Sagemaker=true $SWARM_NODE)
+else
+  export DR_DOCKER_FILE_SEP="-f"
+fi
+
+# Check if CUDA_VISIBLE_DEVICES is configured.
+if [[ -n "${CUDA_VISIBLE_DEVICES}" ]]; then
+  echo "WARNING: You have CUDA_VISIBLE_DEVICES defined. The will no longer work as"
+  echo "         expected. To control GPU assignment use DR_ROBOMAKER_CUDA_DEVICES"
+  echo "         and DR_SAGEMAKER_CUDA_DEVICES and rlcoach v5.0.1 or later."
+fi
+
+# Check if CUDA_VISIBLE_DEVICES is configured.
+if [ "${DR_CLOUD,,}" == "local" ] && [ -z "${DR_MINIO_IMAGE}" ]; then
+  echo "WARNING: You have not configured DR_MINIO_IMAGE in system.env."
+  echo "         System will default to tag RELEASE.2022-10-24T18-35-07Z"
+  export DR_MINIO_IMAGE="RELEASE.2022-10-24T18-35-07Z"
+fi
+
+# Prepare the docker compose files depending on parameters
+if [[ "${DR_CLOUD,,}" == "azure" ]]; then
+  export DR_LOCAL_S3_ENDPOINT_URL="http://localhost:9000"
+  export DR_MINIO_URL="http://minio:9000"
+  DR_LOCAL_PROFILE_ENDPOINT_URL="--profile $DR_LOCAL_S3_PROFILE --endpoint-url $DR_LOCAL_S3_ENDPOINT_URL"
+  DR_TRAIN_COMPOSE_FILE="$DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-training.yml $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-endpoint.yml"
+  DR_EVAL_COMPOSE_FILE="$DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-eval.yml $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-endpoint.yml"
+  DR_MINIO_COMPOSE_FILE="$DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-local.yml"
+elif [[ "${DR_CLOUD,,}" == "local" ]]; then
+  export DR_LOCAL_S3_ENDPOINT_URL="http://localhost:9000"
+  export DR_MINIO_URL="http://minio:9000"
+  DR_LOCAL_PROFILE_ENDPOINT_URL="--profile $DR_LOCAL_S3_PROFILE --endpoint-url $DR_LOCAL_S3_ENDPOINT_URL"
+  DR_TRAIN_COMPOSE_FILE="$DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-training.yml $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-endpoint.yml"
+  DR_EVAL_COMPOSE_FILE="$DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-eval.yml $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-endpoint.yml"
+  DR_MINIO_COMPOSE_FILE="$DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-local.yml"
+elif [[ "${DR_CLOUD,,}" == "remote" ]]; then
+  export DR_LOCAL_S3_ENDPOINT_URL="$DR_REMOTE_MINIO_URL"
+  export DR_MINIO_URL="$DR_REMOTE_MINIO_URL"
+  DR_LOCAL_PROFILE_ENDPOINT_URL="--profile $DR_LOCAL_S3_PROFILE --endpoint-url $DR_LOCAL_S3_ENDPOINT_URL"
+  DR_TRAIN_COMPOSE_FILE="$DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-training.yml $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-endpoint.yml"
+  DR_EVAL_COMPOSE_FILE="$DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-eval.yml $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-endpoint.yml"
+  DR_MINIO_COMPOSE_FILE=""
+elif [[ "${DR_CLOUD,,}" == "aws" ]]; then
+  DR_LOCAL_PROFILE_ENDPOINT_URL=""
+  DR_TRAIN_COMPOSE_FILE="$DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-training.yml $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-aws.yml"
+  DR_EVAL_COMPOSE_FILE="$DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-eval.yml $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-aws.yml"
+else
+  DR_LOCAL_PROFILE_ENDPOINT_URL=""
+  DR_TRAIN_COMPOSE_FILE="$DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-training.yml"
+  DR_EVAL_COMPOSE_FILE="$DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-eval.yml"
+fi
+
+# Add host X support for Linux and WSL2
+if [[ "${DR_HOST_X,,}" == "true" ]]; then
+  if [[ "$IS_WSL2" == "yes" ]]; then
+  
+    # Check if package x11-server-utils is installed
+    if ! command -v xset &> /dev/null; then
+      echo "WARNING: Package x11-server-utils is not installed. Please install it to enable X11 support."
+    fi
+  
+    if [[ "${DR_DOCKER_STYLE,,}" == "swarm" && "${DR_USE_GUI,,}" == "true" ]]; then
+      echo "WARNING: Cannot use GUI in Swarm mode. Please switch to Compose mode."
+    fi
+
+    DR_TRAIN_COMPOSE_FILE="$DR_TRAIN_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-local-xorg-wsl.yml"
+    DR_EVAL_COMPOSE_FILE="$DR_EVAL_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-local-xorg-wsl.yml"
+  else
+    DR_TRAIN_COMPOSE_FILE="$DR_TRAIN_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-local-xorg.yml"
+    DR_EVAL_COMPOSE_FILE="$DR_EVAL_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-local-xorg.yml"
+  fi
+fi
+
+# Prevent docker swarms to restart
+if [[ "${DR_DOCKER_STYLE,,}" == "swarm" ]]; then
+  DR_TRAIN_COMPOSE_FILE="$DR_TRAIN_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-training-swarm.yml"
+  DR_EVAL_COMPOSE_FILE="$DR_EVAL_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-eval-swarm.yml"
+fi
+
+# Enable logs in CloudWatch
+if [[ "${DR_CLOUD_WATCH_ENABLE,,}" == "true" ]]; then
+  DR_TRAIN_COMPOSE_FILE="$DR_TRAIN_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-cwlog.yml"
+  DR_EVAL_COMPOSE_FILE="$DR_EVAL_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-cwlog.yml"
+fi
+
+# Enable local simapp mount
+if [[ -d "${DR_ROBOMAKER_MOUNT_SIMAPP_DIR,,}" ]]; then
+  DR_TRAIN_COMPOSE_FILE="$DR_TRAIN_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-simapp.yml"
+  DR_EVAL_COMPOSE_FILE="$DR_EVAL_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-simapp.yml"
+fi
+
+# Enable local scripts mount
+if [[ -d "${DR_ROBOMAKER_MOUNT_SCRIPTS_DIR,,}" ]]; then
+  DR_TRAIN_COMPOSE_FILE="$DR_TRAIN_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-robomaker-scripts.yml"
+  DR_EVAL_COMPOSE_FILE="$DR_EVAL_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-robomaker-scripts.yml"
+fi
+
+## Check if we have an AWS IAM assumed role, or if we need to set specific credentials.
+
+export DR_LOCAL_ACCESS_KEY_ID=physicar
+export DR_LOCAL_SECRET_ACCESS_KEY=physicar
+DR_TRAIN_COMPOSE_FILE="$DR_TRAIN_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-keys.yml"
+DR_EVAL_COMPOSE_FILE="$DR_EVAL_COMPOSE_FILE $DR_DOCKER_FILE_SEP $DIR/docker/docker-compose-keys.yml"
+export DR_UPLOAD_PROFILE="--profile $DR_UPLOAD_S3_PROFILE"
+export DR_LOCAL_S3_AUTH_MODE="profile"
+
+export DR_TRAIN_COMPOSE_FILE
+export DR_EVAL_COMPOSE_FILE
+export DR_LOCAL_PROFILE_ENDPOINT_URL
+
+if [[ -n "${DR_MINIO_COMPOSE_FILE}" ]]; then
+  export MINIO_UID=$(id -u)
+  export MINIO_USERNAME=$(id -u -n)
+  export MINIO_GID=$(id -g)
+  export MINIO_GROUPNAME=$(id -g -n)
+  if [[ "$MINIO_START" == "true" ]]; then
+    if [[ "${DR_DOCKER_STYLE,,}" == "swarm" ]]; then
+      if [ "$DR_DOCKER_MAJOR_VERSION" -gt 24 ]; then
+        DETACH_FLAG="--detach=true"
+      fi
+      docker stack deploy $DR_MINIO_COMPOSE_FILE $DETACH_FLAG s3
+    else
+      docker compose $DR_MINIO_COMPOSE_FILE -p s3 up -d
+    fi
+  fi
+fi
+
+## Version check
+if [[ -z "$DR_SIMAPP_SOURCE" || -z "$DR_SIMAPP_VERSION" ]]; then
+  DEFAULT_SIMAPP_VERSION=$(jq -r '.containers.simapp | select (.!=null)' $DIR/defaults/dependencies.json)
+  echo "ERROR: Variable DR_SIMAPP_SOURCE or DR_SIMAPP_VERSION not defined."
+  echo ""
+  echo "As of version 5.3 the variables DR_SIMAPP_SOURCE and DR_SIMAPP_VERSION are required in system.env."
+  echo "To continue to use the separate Sagemaker, Robomaker and RL Coach images, run 'git checkout legacy'."
+  echo ""
+  echo "Please add the following lines to your system.env file:"
+  echo "DR_SIMAPP_SOURCE=physicar/deepracer-simapp"
+  echo "DR_SIMAPP_VERSION=${DEFAULT_SIMAPP_VERSION}-gpu"
+  return
+fi
+
+DEPENDENCY_VERSION=$(jq -r '.master_version  | select (.!=null)' $DIR/defaults/dependencies.json)
+
+SIMAPP_VER=$(docker inspect ${DR_SIMAPP_SOURCE}:${DR_SIMAPP_VERSION} 2>/dev/null | jq -r .[].Config.Labels.version)
+if [ -z "$SIMAPP_VER" ]; then SIMAPP_VER=$SIMAPP_VERSION; fi
+if ! verlte $DEPENDENCY_VERSION $SIMAPP_VER; then
+  echo "WARNING: Incompatible version of Deepracer Simapp. Expected >$DEPENDENCY_VERSION. Got $SIMAPP_VER."
+fi
+
+# Get Docker version
+DOCKER_VERSION=$(docker --version | grep -oP '\d+\.\d+\.\d+' | head -1)
+DR_DOCKER_MAJOR_VERSION=$(echo $DOCKER_VERSION | cut -d. -f1)
+export DR_DOCKER_MAJOR_VERSION
+
+## Create a dr-local-aws command
+alias dr-local-aws='aws $DR_LOCAL_PROFILE_ENDPOINT_URL'
+
+source $SCRIPT_DIR/scripts_wrapper.sh
+
+function dr-update {
+  dr-update-env
+}
+
+function dr-reload {
+  source $DIR/bin/activate.sh $DR_CONFIG
+}
