@@ -81,6 +81,11 @@ config['WORLD_NAME'] = os.environ.get('DR_WORLD_NAME', 'LGSWide')
 config['NUMBER_OF_TRIALS'] = os.environ.get('DR_EVAL_NUMBER_OF_TRIALS', '5')
 config['ENABLE_DOMAIN_RANDOMIZATION'] = os.environ.get('DR_ENABLE_DOMAIN_RANDOMIZATION', 'false')
 config['RESET_BEHIND_DIST'] = os.environ.get('DR_EVAL_RESET_BEHIND_DIST', '1.0')
+# Mercy reset: after repeated crashes into the same obstacle, respawn ahead of
+# it instead of behind (feature flag read by markov rollout_agent_ctrl). (physicar)
+config['ENABLE_MERCY_RESET'] = os.environ.get('DR_ENABLE_MERCY_RESET', 'True')
+config['RESET_AHEAD_DIST'] = os.environ.get('DR_EVAL_RESET_AHEAD_DIST', '0.5')
+config['MAX_RESETS_AFTER_CRASH'] = os.environ.get('DR_EVAL_MAX_RESETS_AFTER_CRASH', '1')
 
 config['IS_CONTINUOUS'] = os.environ.get('DR_EVAL_IS_CONTINUOUS', 'True')
 config['NUMBER_OF_RESETS'] = os.environ.get('DR_EVAL_MAX_RESETS', '0')
@@ -149,6 +154,12 @@ if config['RACE_TYPE'] == 'HEAD_TO_MODEL':
     config['BODY_SHELL_TYPE'].append(body_shell_type)
     config['VIDEO_JOB_TYPE'] = 'EVALUATION'
     config['CAR_COLOR'] = ['Purple', 'Orange']    
+    config['MODEL_NAME'] = config['DISPLAY_NAME']
+
+# Video overlay: for evaluations the simapp displays MODEL_NAME (see markov
+# utils.get_video_display_name), but upstream only sets it in the head-to-head
+# branch above. Set it for single-car evaluations too. (physicar)
+if 'MODEL_NAME' not in config:
     config['MODEL_NAME'] = config['DISPLAY_NAME']
 
 # S3 Setup / write and upload file

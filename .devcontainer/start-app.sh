@@ -11,7 +11,13 @@ PHYSICAR_PYTHON_PKG="$(python3 -c 'import physicar, os; print(os.path.dirname(os
 RELOAD_DIR="${PHYSICAR_PYTHON_DEV}"
 if [ ! -d "$RELOAD_DIR" ]; then
     pip3 install --upgrade 'physicar[codespaces-deepracer]' 2>/dev/null
-    git -C "$WORKSPACE/.devcontainer/deepracer-simapp-mount" pull 2>/dev/null
+    # deepracer-simapp-mount follows the latest v1.* TAG (not main HEAD), so
+    # commits ship to students only when a release tag is pushed — same policy
+    # as the device updater.
+    SIMAPP_DIR="$WORKSPACE/.devcontainer/deepracer-simapp-mount"
+    git -C "$SIMAPP_DIR" fetch --tags 2>/dev/null
+    SIMAPP_TAG=$(git -C "$SIMAPP_DIR" tag -l 'v1.*' --sort=-v:refname | head -1)
+    [ -n "$SIMAPP_TAG" ] && git -C "$SIMAPP_DIR" -c advice.detachedHead=false checkout -f "$SIMAPP_TAG" 2>/dev/null
     RELOAD_DIR="$PHYSICAR_PYTHON_PKG"
 fi
 
