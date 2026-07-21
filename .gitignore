@@ -10,5 +10,3 @@ log/
 tmp/
 *.log
 __pycache__/
-deepracer/
-myapp/
