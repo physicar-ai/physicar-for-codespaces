@@ -15,7 +15,7 @@ BASE_URL = "http://localhost"    # robot web API; simulator endpoints live under
 
 STEP_DT = 1 / 15        # one action per camera frame
 MAX_STEPS = 150         # episode length limit (10 s at 15 Hz)
-WORLDS = ["physicar_base", "2022_june_open"]   # tracks to train on
+WORLDS = ["physicar_base"]   # tracks to train on
 WHEELBASE = 0.18        # robot dimensions (from its URDF), for wheel positions
 TRACK_OF_CAR = 0.16
 
