@@ -1,0 +1,64 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>training</title>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; background: #14161a; color: #dfe3e8; overflow: hidden;
+         font: 13px/1.4 system-ui, sans-serif; }
+  main { height: 100%; box-sizing: border-box; padding: 12px 14px;
+         display: flex; flex-direction: column; gap: 10px; }
+  #status { color: #6f7a87; font-variant-numeric: tabular-nums; flex: none; }
+
+  .nums { display: flex; gap: 28px; flex: none; }
+  .nums b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .nums span { display: block; font-size: 11px; color: #6f7a87; }
+  #chartbox { flex: 1; min-height: 0; background: #1b1e24; border-radius: 10px;
+              padding: 10px; box-sizing: border-box; }
+  canvas { width: 100%; height: 100%; display: block; }
+</style>
+<main>
+  <div id="status">waiting for the first episode...</div>
+  <div class="nums">
+    <div><b id="n-ep">0</b><span>episodes</span></div>
+    <div><b id="n-last">-</b><span>last reward</span></div>
+    <div><b id="n-best">-</b><span>best reward</span></div>
+  </div>
+  <div id="chartbox"><canvas id="chart"></canvas></div>
+</main>
+<script>
+var c = document.getElementById('chart');
+function draw(eps) {
+  c.width = c.clientWidth * 2; c.height = c.clientHeight * 2;
+  var ctx = c.getContext('2d');
+  if (eps.length < 2) return;
+  var rs = eps.map(function(e) { return e.reward; });
+  var lo = Math.min.apply(null, rs), hi = Math.max.apply(null, rs);
+  if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+  var px = function(i) { return 8 + i / (eps.length - 1) * (c.width - 16); };
+  var py = function(r) { return 10 + (1 - (r - lo) / (hi - lo)) * (c.height - 20); };
+  ctx.lineWidth = 2; ctx.strokeStyle = '#3d4654'; ctx.beginPath();
+  rs.forEach(function(r, i) { ctx[i ? 'lineTo' : 'moveTo'](px(i), py(r)); });
+  ctx.stroke();
+  // rolling mean over the last 10 episodes: the actual learning trend
+  ctx.lineWidth = 4; ctx.strokeStyle = '#5aa9e6'; ctx.beginPath();
+  rs.forEach(function(_, i) {
+    var w = rs.slice(Math.max(0, i - 9), i + 1);
+    var m = w.reduce(function(a, b) { return a + b; }, 0) / w.length;
+    ctx[i ? 'lineTo' : 'moveTo'](px(i), py(m));
+  });
+  ctx.stroke();
+}
+setInterval(function() {
+  fetch('data').then(function(r) { return r.json(); }).then(function(d) {
+    if (d.status) document.getElementById('status').textContent = d.status;
+    var eps = d.episodes;
+    document.getElementById('n-ep').textContent = eps.length;
+    if (eps.length) {
+      document.getElementById('n-last').textContent = eps[eps.length - 1].reward.toFixed(1);
+      document.getElementById('n-best').textContent =
+        Math.max.apply(null, eps.map(function(e) { return e.reward; })).toFixed(1);
+    }
+    draw(eps);
+  }).catch(function() {});
+}, 2000);
+</script>

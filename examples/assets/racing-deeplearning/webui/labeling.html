@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>labeling</title>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; background: #14161a; color: #dfe3e8; overflow: hidden;
+         font: 13px/1.4 system-ui, sans-serif; }
+  main { height: 100%; box-sizing: border-box; padding: 12px 14px;
+         display: flex; flex-direction: column; gap: 10px; }
+  #status { color: #6f7a87; font-variant-numeric: tabular-nums; flex: none; }
+
+  .nums { display: flex; gap: 28px; flex: none; }
+  .nums b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .nums span { display: block; font-size: 11px; color: #6f7a87; }
+  #photo { flex: 1; min-height: 0; background: #1b1e24; border-radius: 10px;
+           display: flex; align-items: center; justify-content: center; }
+  img { max-width: 100%; max-height: 100%; border-radius: 6px; }
+</style>
+<main>
+  <div id="status">press the labeling buttons in the notebook to collect photos</div>
+  <div class="nums" id="counts"></div>
+  <div id="photo"><img id="cam" alt="last saved photo"></div>
+</main>
+<script>
+var cam = document.getElementById('cam'), last = -1;
+setInterval(function() {
+  fetch('data').then(function(r) { return r.json(); }).then(function(d) {
+    var total = 0;
+    document.getElementById('counts').innerHTML = d.actions.map(function(a) {
+      var n = d.counts[a.index] || 0; total += n;
+      var name = a.steering > 0 ? 'left' : a.steering < 0 ? 'right' : 'straight';
+      return '<div><b>' + n + '</b><span>[' + a.key + '] ' + name + '</span></div>';
+    }).join('');
+    document.getElementById('status').textContent =
+      total + ' photos in data/ — last saved photo below';
+    if (total !== last) {   // refresh only when a new photo arrives
+      last = total;
+      var im = new Image();
+      im.onload = function() { cam.src = im.src; };
+      im.src = 'frame?_=' + Date.now();
+    }
+  }).catch(function() {});
+}, 500);
+</script>

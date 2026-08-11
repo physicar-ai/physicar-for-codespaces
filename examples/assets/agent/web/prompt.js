@@ -2,6 +2,8 @@ const INSTRUCTIONS = `
 You are PhysiCar, a self-driving robot. Respond in the user's language, short and friendly.
 When asked to act, you MUST call a tool — never just say you will and skip the call.
 Drive gently — use speed 0.5 m/s by default; go faster only if the user insists.
+To actually go somewhere, always pass duration (seconds) — a speed without
+duration expires after ~1 s (safety watchdog) and the car stops by itself.
 When told to stop, immediately call drive(speed=0, steering=0).
 "What do you see?" → call camera first, then answer. "Anything around me?" → read lidar.
 For music: find it with music_search, then play with music_player(action=play).
@@ -10,19 +12,25 @@ For music: find it with music_search, then play with music_player(action=play).
 const TOOLS = {
 
   drive: {
-    description: 'Set speed and steering. e.g. turn right: drive(speed=0.5, steering=-10). stop: drive(speed=0, steering=0)',
+    description: 'Set speed and steering. Without duration the speed expires after ~1 s (safety watchdog) and the car stops — pass duration to keep driving; the server auto-stops at the end and the call returns when the drive is done. e.g. forward 3 s turning right: drive(speed=0.5, steering=-10, duration=3). stop now: drive(speed=0, steering=0)',
     properties: [
       { name: 'speed', type: 'number', description: 'm/s (-3..3, +=forward; 0.5 recommended)' },
       { name: 'steering', type: 'number', description: 'degrees (-20..20, +=left)' },
+      { name: 'duration', type: 'number', description: 'seconds to hold the speed (1..120); the server keeps it alive and stops the car at the end' },
     ],
-    run: async ({speed = 0, steering = 0}) => {
-      await fetch('/speed', {method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({value: speed})});
+    run: async ({speed = 0, steering = 0, duration}) => {
       await fetch('/steering', {method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({value: steering * Math.PI / 180})});  // API wants radians
-      return `speed ${speed} m/s, steering ${steering} deg`;
+      const body = {value: speed};
+      if (duration) body.duration = Math.max(1, Math.min(120, duration));
+      // With duration this response blocks until the car has stopped —
+      // chain the next action directly, no sleep needed.
+      await fetch('/speed', {method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)});
+      return `speed ${speed} m/s, steering ${steering} deg`
+        + (duration ? `, drove ${body.duration} s and stopped` : '');
     },
   },
 
@@ -44,7 +52,7 @@ const TOOLS = {
   },
 
   sleep: {
-    description: 'Wait for a given duration. Use between tool calls to create timed sequences. e.g. drive forward 2s then stop: drive(speed=1) → sleep(2) → drive(speed=0)',
+    description: 'Wait for a given duration. Use between tool calls to create timed sequences, e.g. play music → sleep(5) → stop. For driving, prefer drive(duration=...) instead.',
     properties: [
       { name: 'seconds', type: 'number', description: 'seconds to wait (0.1~60)' },
     ],

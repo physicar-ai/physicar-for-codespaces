@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>driving</title>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; background: #14161a; color: #dfe3e8; overflow: hidden;
+         font: 13px/1.4 system-ui, sans-serif; }
+  main { height: 100%; box-sizing: border-box; padding: 12px 14px;
+         display: flex; flex-direction: column; gap: 10px; }
+  #status { color: #6f7a87; font-variant-numeric: tabular-nums; flex: none; }
+
+  #bars { flex: 1; display: flex; flex-direction: column;
+          justify-content: center; gap: 14px; }
+  .bar { display: flex; align-items: center; gap: 12px;
+         font-variant-numeric: tabular-nums; }
+  .bar span { width: 100px; color: #9aa4b2; text-align: right; }
+  .bar .track { flex: 1; height: 22px; background: #1b1e24; border-radius: 5px; }
+  .bar i { display: block; height: 100%; border-radius: 5px; background: #3d4654;
+           transition: width 0.15s; }
+  .bar.on i { background: #5aa9e6; }
+  .bar b { width: 44px; color: #6f7a87; font-weight: 400; }
+</style>
+<main>
+  <div id="status">waiting for the model...</div>
+  <div id="bars"></div>
+</main>
+<script>
+setInterval(function() {
+  fetch('data').then(function(r) { return r.json(); }).then(function(d) {
+    if (d.action === undefined) return;
+    var a = d.actions[d.action];
+    document.getElementById('status').textContent =
+      'steering ' + (a.steering > 0 ? 'left ' : a.steering < 0 ? 'right ' : 'straight ')
+      + a.steering.toFixed(0) + '° · speed ' + a.speed.toFixed(1) + ' m/s';
+    document.getElementById('bars').innerHTML = d.actions.map(function(act, i) {
+      var name = act.steering > 0 ? 'left' : act.steering < 0 ? 'right' : 'straight';
+      return '<div class="bar' + (i === d.action ? ' on' : '') + '">'
+        + '<span>' + name + ' ' + act.steering.toFixed(0) + '°</span>'
+        + '<div class="track"><i style="width:' + (d.probs[i] * 100).toFixed(1) + '%"></i></div>'
+        + '<b>' + (d.probs[i] * 100).toFixed(0) + '%</b></div>';
+    }).join('');
+  }).catch(function() {});
+}, 200);
+</script>

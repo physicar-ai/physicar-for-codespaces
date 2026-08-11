@@ -30,11 +30,8 @@
                 // "workbench.editorAssociations": {"*.md": "vscode.markdown.preview.editor"},
                 "explorer.compactFolders": false,
                 "python.defaultInterpreterPath": "/usr/bin/python3",
-                "jupyter.notebookFileRoot": "${workspaceFolder}",
-                "notebook.defaultKernel": {
-                    "id": "python3",
-                    "path": "/usr/bin/python3"
-                },
+                "jupyter.notebookFileRoot": "${fileDirname}",
+                "jupyter.kernels.excludePythonEnvironments": ["/usr/bin/python3"],
                 "workbench.trustedDomains": [
                     "https://physicar.ai",
                     "https://*.physicar.ai",

@@ -1,0 +1,213 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PhysiCar chat agent</title>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; background: #14161a; color: #dfe3e8;
+         font: 14px/1.5 system-ui, sans-serif; display: flex; flex-direction: column; }
+  #log { flex: 1; overflow-y: auto; padding: 14px; display: flex;
+         flex-direction: column; gap: 8px; }
+  .msg { max-width: 82%; padding: 8px 12px; border-radius: 12px;
+         white-space: pre-wrap; word-break: break-word; }
+  .user { align-self: flex-end; background: #2b4a7a; }
+  .bot { align-self: flex-start; background: #23262d; }
+  .tool { align-self: flex-start; background: none; color: #6f7a87;
+          font-size: 12px; padding: 0 12px; }
+  .msg img { max-width: 100%; border-radius: 8px; display: block; margin-top: 6px; }
+  #bar { display: flex; gap: 8px; padding: 10px 14px 14px; }
+  #inp { flex: 1; background: #1b1e24; color: #dfe3e8; border: 1px solid #333;
+         border-radius: 10px; padding: 10px 12px; font: inherit; }
+  #send { background: #2b4a7a; color: #fff; border: 0; border-radius: 10px;
+          padding: 0 18px; font: inherit; cursor: pointer; }
+  #send:disabled { opacity: 0.5; }
+  #status { color: #6f7a87; font-size: 12px; padding: 0 14px 6px; min-height: 16px; }
+</style>
+</head>
+<body>
+  <div id="log"></div>
+  <div id="status"></div>
+  <div id="bar">
+    <input id="inp" placeholder="Message the robot... (e.g. what do you see?)" autocomplete="off">
+    <button id="send">Send</button>
+  </div>
+<script src="prompt.js"></script>
+<script>
+// Text chat on the PhysiCar chat service — the SAME brain as the voice agent:
+// The shared INSTRUCTIONS and TOOLS come from prompt.js. One request per turn (prompt
+// sent inline every time), SSE response, tool calls run right here in the
+// browser and go back as tool_call_outputs.
+(function () {
+  var API = 'https://api.physicar.ai';
+  var log = document.getElementById('log');
+  var inp = document.getElementById('inp');
+  var send = document.getElementById('send');
+  var statusEl = document.getElementById('status');
+
+  var chatId, turn = 0, model = null, busy = false;
+  // Injected by the notebook's Run cell (JSON-quoted); when served without
+  // the notebook the placeholders stay and the prompt.js defaults apply.
+  var CONFIG_MODEL = "__MODEL__";
+  if (CONFIG_MODEL.indexOf("__") === 0) CONFIG_MODEL = "";
+  var CONFIG_INSTRUCTIONS = "__INSTRUCTIONS__";
+  var instructions = CONFIG_INSTRUCTIONS.indexOf("__") === 0 ? INSTRUCTIONS : CONFIG_INSTRUCTIONS;
+
+  function status(t) { statusEl.textContent = t || ''; }
+  function bubble(cls, text) {
+    var d = document.createElement('div');
+    d.className = 'msg ' + cls;
+    d.textContent = text || '';
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+    return d;
+  }
+
+  function token() {
+    return window.physicarSession && physicarSession.token();
+  }
+
+  // The tool schema sent to the model — name/description/properties only,
+  // run() stays here (same contract the realtime session uses).
+  var toolDefs = Object.keys(TOOLS).map(function (name) {
+    return { name: name, description: TOOLS[name].description,
+             properties: TOOLS[name].properties };
+  });
+
+  async function pickModel(tk) {
+    if (model) return model;
+    if (CONFIG_MODEL) { model = CONFIG_MODEL; return model; }
+    var r = await fetch(API + '/chat/models',
+        { headers: { 'Authorization': 'Bearer ' + tk } });
+    if (!r.ok) throw new Error('models: HTTP ' + r.status);
+    var models = (await r.json()).models || [];
+    if (!models.length) throw new Error('no chat models available');
+    model = models[0].id || models[0];
+    return model;
+  }
+
+  // One /chat request; streams text into a bubble, returns the done frame.
+  async function turnRequest(tk, userMessage) {
+    var res = await fetch(API + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json',
+                 'Authorization': 'Bearer ' + tk },
+      body: JSON.stringify({
+        chat_id: chatId, turn: turn,
+        prompt: { model: model, instructions: instructions, tools: toolDefs },
+        user_message: userMessage,
+        stream: true,
+      }),
+    });
+    if (!res.ok) {
+      var d; try { d = await res.json(); } catch (e) {}
+      throw new Error((d && d.error) || 'chat: HTTP ' + res.status);
+    }
+    var out = null, done = null;
+    var reader = res.body.getReader(), dec = new TextDecoder(), buf = '';
+    while (true) {
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      buf += dec.decode(chunk.value, { stream: true });
+      var i;
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        var frame = buf.slice(0, i); buf = buf.slice(i + 2);
+        frame.split('\n').forEach(function (line) {
+          line = line.trim();
+          if (line.indexOf('data:') !== 0) return;
+          var ev; try { ev = JSON.parse(line.slice(5)); } catch (e) { return; }
+          if (ev.type === 'text' && ev.content) {
+            if (!out) out = bubble('bot', '');
+            out.textContent += ev.content;
+            log.scrollTop = log.scrollHeight;
+          } else if (ev.type === 'done') {
+            done = ev;
+          } else if (ev.type === 'error') {
+            throw new Error(ev.message || 'stream error');
+          }
+        });
+      }
+    }
+    if (!done) throw new Error('stream ended without done');
+    chatId = done.chat_id;
+    turn = (typeof done.turn === 'number' ? done.turn : turn) + 1;
+    return done;
+  }
+
+  async function runTool(call) {
+    var t = TOOLS[call.name];
+    var card = bubble('tool', '⚙ ' + call.name + '(' + JSON.stringify(call.arguments || {}) + ')');
+    var contents;
+    try {
+      var r = await t.run(call.arguments || {});
+      if (r && typeof r === 'object') {          // {output, image}
+        contents = [{ type: 'text', text: String(r.output || '') }];
+        if (r.image) {
+          contents.push({ type: 'image', mime: 'image/jpeg', base64: r.image });
+          var img = document.createElement('img');
+          img.src = 'data:image/jpeg;base64,' + r.image;
+          card.appendChild(img);
+        }
+      } else {
+        contents = [{ type: 'text', text: String(r) }];
+      }
+      card.firstChild.textContent = '⚙ ' + call.name + ' ✓';
+    } catch (e) {
+      contents = [{ type: 'text', text: 'tool failed: ' + (e && e.message || e) }];
+      card.firstChild.textContent = '⚙ ' + call.name + ' ✕';
+    }
+    return { call_id: call.call_id, name: call.name, contents: contents };
+  }
+
+  async function ask(text) {
+    var tk = token();
+    if (!tk) { status('Sign in on the App page (Chat) first — no session token.'); return; }
+    busy = true; send.disabled = true;
+    bubble('user', text);
+    try {
+      await pickModel(tk);
+      status('thinking... (' + model + ')');
+      var userMessage = { contents: [{ type: 'text', text: text }] };
+      // tool loop: keep answering tool calls until the model stops making them
+      for (var round = 0; round < 8; round++) {
+        var done = await turnRequest(tk, userMessage);
+        var calls = done.tool_calls || [];
+        if (!calls.length) break;
+        var outputs = [];
+        for (var i = 0; i < calls.length; i++) outputs.push(await runTool(calls[i]));
+        userMessage = { contents: [], tool_call_outputs: outputs };
+      }
+      status('');
+    } catch (e) {
+      status(String(e && e.message || e));
+      if (/token|auth|401/i.test(String(e))) { try { physicarSession.clear(); } catch (e2) {} }
+    }
+    busy = false; send.disabled = false; inp.focus();
+  }
+
+  function submit() {
+    var text = inp.value.trim();
+    if (!text || busy) return;
+    inp.value = '';
+    ask(text);
+  }
+  send.addEventListener('click', submit);
+  inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+
+  // safety twin of the voice page: leaving the tab must stop the car
+  window.addEventListener('pagehide', function () {
+    try {
+      var blob = new Blob([JSON.stringify({ value: 0 })], { type: 'application/json' });
+      navigator.sendBeacon('/speed', blob);
+      navigator.sendBeacon('/steering', blob);
+    } catch (e) {}
+  });
+
+  bubble('bot', 'Hi! I am PhysiCar. Ask me to drive, look around, or describe what I see.');
+  if (!token()) status('Sign in on the App page (Chat) first — waiting for the session...');
+  inp.focus();
+}());
+</script>
+</body>
+</html>

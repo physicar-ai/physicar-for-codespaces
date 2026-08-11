@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>line tracing</title>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; background: #14161a; overflow: hidden; }
+  #wrap { position: relative; width: 100%; height: 100%; }
+  img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  #status { position: absolute; top: 8px; left: 8px;
+            background: rgba(0,0,0,0.55); color: #eee; padding: 3px 10px;
+            border-radius: 6px; font: 13px/1.6 system-ui, sans-serif;
+            font-variant-numeric: tabular-nums; }
+</style>
+<div id="wrap">
+  <img id="cam" alt="">
+  <div id="status">waiting for frames...</div>
+</div>
+<script>
+var cam = document.getElementById('cam');
+(function loop() {   // double-buffered: swap only after the new frame decoded
+  var im = new Image();
+  im.onload = function() { cam.src = im.src; setTimeout(loop, 100); };
+  im.onerror = function() { setTimeout(loop, 400); };
+  im.src = 'frame?_=' + Date.now();
+})();
+setInterval(function() {
+  fetch('data').then(function(r) { return r.json(); }).then(function(d) {
+    if (d.status) document.getElementById('status').textContent = d.status;
+  }).catch(function() {});
+}, 300);
+</script>

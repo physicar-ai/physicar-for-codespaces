@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>training</title>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; background: #14161a; color: #dfe3e8; overflow: hidden;
+         font: 13px/1.4 system-ui, sans-serif; }
+  main { height: 100%; box-sizing: border-box; padding: 12px 14px;
+         display: flex; flex-direction: column; gap: 10px; }
+  #status { color: #6f7a87; font-variant-numeric: tabular-nums; flex: none; }
+
+  #chartbox { flex: 1; min-height: 0; background: #1b1e24; border-radius: 10px;
+              padding: 10px; box-sizing: border-box; }
+  canvas { width: 100%; height: 100%; display: block; }
+</style>
+<main>
+  <div id="status">waiting for the first epoch...</div>
+  <div id="chartbox"><canvas id="chart"></canvas></div>
+</main>
+<script>
+var c = document.getElementById('chart');
+function draw(eps) {
+  c.width = c.clientWidth * 2; c.height = c.clientHeight * 2;
+  var ctx = c.getContext('2d');
+  if (eps.length < 2) return;
+  var px = function(i) { return 8 + i / (eps.length - 1) * (c.width - 16); };
+  var py = function(a) { return 10 + (1 - a) * (c.height - 20); };
+  ctx.lineWidth = 4; ctx.strokeStyle = '#5aa9e6'; ctx.beginPath();
+  eps.forEach(function(e, i) { ctx[i ? 'lineTo' : 'moveTo'](px(i), py(e.accuracy)); });
+  ctx.stroke();
+}
+setInterval(function() {
+  fetch('data').then(function(r) { return r.json(); }).then(function(d) {
+    if (d.status) document.getElementById('status').textContent = d.status;
+    draw(d.epochs);
+  }).catch(function() {});
+}, 1000);
+</script>

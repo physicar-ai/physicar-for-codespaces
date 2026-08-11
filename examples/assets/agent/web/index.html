@@ -166,6 +166,10 @@
   <!-- Plumbing below (realtime WS / mic / speaker / stage) — no need to read it -->
   <script>
     const REALTIME_URL = 'wss://api.physicar.ai/realtime';
+    // Injected by the notebook's Run cell (JSON-quoted); without the notebook
+    // the placeholder stays and the prompt.js default applies.
+    var CONFIG_INSTRUCTIONS = "__INSTRUCTIONS__";
+    var instructions = CONFIG_INSTRUCTIONS.indexOf("__") === 0 ? INSTRUCTIONS : CONFIG_INSTRUCTIONS;
     // Robot speaker: same-origin WS endpoint (works in SIM and on the real kit)
     const SPEAKER_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://')
                         + location.host + '/audio/stream';
@@ -276,7 +280,7 @@
       ws.onopen = () => ws.send(JSON.stringify({
         type: 'session.start',
         prompt: {
-          instructions: INSTRUCTIONS,
+          instructions: instructions,
           tools: Object.entries(TOOLS).map(([name, t]) => (
             { name, description: t.description, properties: t.properties || [] })),
         },
